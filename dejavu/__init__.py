@@ -1,6 +1,6 @@
 from dejavu.database import get_database, Database
 import dejavu.decoder as decoder
-import fingerprint
+import dejavu.fingerprint as fingerprint
 import multiprocessing
 import os
 import traceback
@@ -38,6 +38,7 @@ class Dejavu(object):
         # get songs previously indexed
         self.songs = self.db.get_songs()
         self.songhashes_set = set()  # to know which ones we've computed before
+        
         for song in self.songs:
             song_hash = song[Database.FIELD_FILE_SHA1]
             self.songhashes_set.add(song_hash)
@@ -58,7 +59,7 @@ class Dejavu(object):
 
             # don't refingerprint already fingerprinted files
             if decoder.unique_hash(filename) in self.songhashes_set:
-                print "%s already fingerprinted, continuing..." % filename
+                print("%s already fingerprinted, continuing..." % filename)
                 continue
 
             filenames_to_fingerprint.append(filename)
@@ -99,7 +100,7 @@ class Dejavu(object):
         song_name = song_name or songname
         # don't refingerprint already fingerprinted files
         if song_hash in self.songhashes_set:
-            print "%s already fingerprinted, continuing..." % song_name
+            print("%s already fingerprinted, continuing..." % song_name)
         else:
             song_name, hashes, file_hash = _fingerprint_worker(
                 filepath,
@@ -168,35 +169,35 @@ class Dejavu(object):
 
 
 def _fingerprint_worker(filename, limit=None, song_name=None):
-    # Pool.imap sends arguments as tuples so we have to unpack
-    # them ourself.
-    try:
-        filename, limit = filename
-    except ValueError:
-        pass
+	# Pool.imap sends arguments as tuples so we have to unpack
+	# them ourself.
+	try:
+		filename, limit = filename
+	except ValueError:
+		pass
 
-    songname, extension = os.path.splitext(os.path.basename(filename))
-    song_name = song_name or songname
-    channels, Fs, file_hash = decoder.read(filename, limit)
-    result = set()
-    channel_amount = len(channels)
+	songname, extension = os.path.splitext(os.path.basename(filename))
+	song_name = song_name or songname
+	channels, Fs, file_hash = decoder.read(filename, limit)
+	result = set()
+	channel_amount = len(channels)
 
-    for channeln, channel in enumerate(channels):
-        # TODO: Remove prints or change them into optional logging.
-        print("Fingerprinting channel %d/%d for %s" % (channeln + 1,
-                                                       channel_amount,
-                                                       filename))
-        hashes = fingerprint.fingerprint(channel, Fs=Fs)
-        print("Finished channel %d/%d for %s" % (channeln + 1, channel_amount,
-                                                 filename))
-        result |= set(hashes)
+	for channeln, channel in enumerate(channels):
+		# TODO: Remove prints or change them into optional logging.
+		print("Fingerprinting channel %d/%d for %s" % (channeln + 1,
+													   channel_amount,
+													   filename))
+		hashes = fingerprint.fingerprint(channel, Fs=Fs)
+		print("Finished channel %d/%d for %s" % (channeln + 1, channel_amount,
+												 filename))
+		result |= set(hashes)
 
-    return song_name, result, file_hash
+	return song_name, result, file_hash
 
 
 def chunkify(lst, n):
-    """
-    Splits a list into roughly n equal parts.
-    http://stackoverflow.com/questions/2130016/splitting-a-list-of-arbitrary-size-into-only-roughly-n-equal-parts
-    """
-    return [lst[i::n] for i in xrange(n)]
+	"""
+	Splits a list into roughly n equal parts.
+	http://stackoverflow.com/questions/2130016/splitting-a-list-of-arbitrary-size-into-only-roughly-n-equal-parts
+	"""
+	return [lst[i::n] for i in xrange(n)]

@@ -1,9 +1,9 @@
 from __future__ import absolute_import
-from itertools import izip_longest
-import Queue
+from itertools import zip_longest
+import queue
 
-import MySQLdb as mysql
-from MySQLdb.cursors import DictCursor
+from mysql.connector import (connection)
+from mysql.connector import (cursor)
 
 from dejavu.database import Database
 
@@ -269,8 +269,8 @@ class SQLDatabase(Database):
         values into the database.
         """
         values = []
-        for hash, offset in hashes:
-            values.append((hash, sid, offset))
+        for hashit, offset in hashes:
+            values.append((hashit, int(sid), int(offset)))
 
         with self.cursor(charset="utf8") as cur:
             for split_values in grouper(values, 1000):
@@ -283,8 +283,8 @@ class SQLDatabase(Database):
         """
         # Create a dictionary of hash => offset pairs for later lookups
         mapper = {}
-        for hash, offset in hashes:
-            mapper[hash.upper()] = offset
+        for hashit, offset in hashes:
+            mapper[hashit.upper()] = offset
 
         # Get an iteratable of all the hashes we need
         values = mapper.keys()
@@ -297,9 +297,9 @@ class SQLDatabase(Database):
 
                 cur.execute(query, split_values)
 
-                for hash, sid, offset in cur:
+                for hashit, sid, offset in cur:
                     # (sid, db_offset - song_sampled_offset)
-                    yield (sid, offset - mapper[hash])
+                    yield (sid, offset - mapper[hashit])
 
     def __getstate__(self):
         return (self._options,)
@@ -310,64 +310,65 @@ class SQLDatabase(Database):
 
 
 def grouper(iterable, n, fillvalue=None):
-    args = [iter(iterable)] * n
-    return (filter(None, values) for values
-            in izip_longest(fillvalue=fillvalue, *args))
+	args = [iter(iterable)] * n
+	return (list(filter(None, values)) for values in zip_longest(*args, fillvalue=fillvalue))
 
 
 def cursor_factory(**factory_options):
-    def cursor(**options):
-        options.update(factory_options)
-        return Cursor(**options)
-    return cursor
+	def cursor(**options):
+		options.update(factory_options)
+		return Cursor(**options)
+	return cursor
 
 
-class Cursor(object):
-    """
-    Establishes a connection to the database and returns an open cursor.
+class Cursor():
+	"""
+	Establishes a connection to the database and returns an open cursor.
 
 
-    ```python
-    # Use as context manager
-    with Cursor() as cur:
-        cur.execute(query)
-    ```
-    """
+	```python
+	# Use as context manager
+	with Cursor() as cur:
+		cur.execute(query)
+	```
+	"""
+	_cache = queue.Queue(maxsize=5)
 
-    def __init__(self, cursor_type=mysql.cursors.Cursor, **options):
-        super(Cursor, self).__init__()
+	def __init__(self, cursor_class=cursor.MySQLCursor, **options):
+		super(Cursor, self).__init__()
 
-        self._cache = Queue.Queue(maxsize=5)
-        try:
-            conn = self._cache.get_nowait()
-        except Queue.Empty:
-            conn = mysql.connect(**options)
-        else:
-            # Ping the connection before using it from the cache.
-            conn.ping(True)
+		try:
+			conn = self._cache.get_nowait()
+		except queue.Empty:
+			conn = connection.MySQLConnection(**options)
+		else:
+			# Ping the connection before using it from the cache.
+			conn.ping(True)
 
-        self.conn = conn
-        self.conn.autocommit(False)
-        self.cursor_type = cursor_type
+		self.conn = conn
+		#self.conn.autocommit(False)
+		if options is not None and 'cursor_class' in options:
+			cursor_class = options['cursor_class']
+		self.cursor_class = cursor_class
 
-    @classmethod
-    def clear_cache(cls):
-        cls._cache = Queue.Queue(maxsize=5)
+	@classmethod
+	def clear_cache(cls):
+		cls._cache = queue.Queue(maxsize=5)
 
-    def __enter__(self):
-        self.cursor = self.conn.cursor(self.cursor_type)
-        return self.cursor
+	def __enter__(self):
+		self.cursor = self.conn.cursor(cursor_class=self.cursor_class)
+		return self.cursor
 
-    def __exit__(self, extype, exvalue, traceback):
-        # if we had a MySQL related error we try to rollback the cursor.
-        if extype is mysql.MySQLError:
-            self.cursor.rollback()
+	def __exit__(self, extype, exvalue, traceback):
+		# if we had a MySQL related error we try to rollback the cursor.
+		if extype is not None:
+			self.conn.rollback()
 
-        self.cursor.close()
-        self.conn.commit()
+		self.cursor.close()
+		self.conn.commit()
 
-        # Put it back on the queue
-        try:
-            self._cache.put_nowait(self.conn)
-        except Queue.Full:
-            self.conn.close()
+		# Put it back on the queue
+		try:
+			self._cache.put_nowait(self.conn)
+		except Queue.Full:
+			self.conn.close()

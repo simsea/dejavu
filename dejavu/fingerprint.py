@@ -3,7 +3,7 @@ import matplotlib.mlab as mlab
 import matplotlib.pyplot as plt
 from scipy.ndimage.filters import maximum_filter
 from scipy.ndimage.morphology import (generate_binary_structure,
-                                      iterate_structure, binary_erosion)
+									  iterate_structure, binary_erosion)
 import hashlib
 from operator import itemgetter
 
@@ -62,31 +62,31 @@ PEAK_SORT = True
 FINGERPRINT_REDUCTION = 20
 
 def fingerprint(channel_samples, Fs=DEFAULT_FS,
-                wsize=DEFAULT_WINDOW_SIZE,
-                wratio=DEFAULT_OVERLAP_RATIO,
-                fan_value=DEFAULT_FAN_VALUE,
-                amp_min=DEFAULT_AMP_MIN):
-    """
-    FFT the channel, log transform output, find local maxima, then return
-    locally sensitive hashes.
-    """
-    # FFT the signal and extract frequency components
-    arr2D = mlab.specgram(
-        channel_samples,
-        NFFT=wsize,
-        Fs=Fs,
-        window=mlab.window_hanning,
-        noverlap=int(wsize * wratio))[0]
+				wsize=DEFAULT_WINDOW_SIZE,
+				wratio=DEFAULT_OVERLAP_RATIO,
+				fan_value=DEFAULT_FAN_VALUE,
+				amp_min=DEFAULT_AMP_MIN):
+	"""
+	FFT the channel, log transform output, find local maxima, then return
+	locally sensitive hashes.
+	"""
+	# FFT the signal and extract frequency components
+	arr2D = mlab.specgram(
+		channel_samples,
+		NFFT=wsize,
+		Fs=Fs,
+		window=mlab.window_hanning,
+		noverlap=int(wsize * wratio))[0]
 
-    # apply log transform since specgram() returns linear array
-    arr2D = 10 * np.log10(arr2D)
-    arr2D[arr2D == -np.inf] = 0  # replace infs with zeros
+	# apply log transform since specgram() returns linear array
+	arr2D = 10 * np.log10(arr2D)
+	arr2D[arr2D == -np.inf] = 0  # replace infs with zeros
 
-    # find local maxima
-    local_maxima = get_2D_peaks(arr2D, plot=False, amp_min=amp_min)
+	# find local maxima
+	local_maxima = get_2D_peaks(arr2D, plot=False, amp_min=amp_min)
 
-    # return hashes
-    return generate_hashes(local_maxima, fan_value=fan_value)
+	# return hashes
+	return generate_hashes(local_maxima, fan_value=fan_value)
 
 
 def get_2D_peaks(arr2D, plot=False, amp_min=DEFAULT_AMP_MIN):
@@ -110,13 +110,12 @@ def get_2D_peaks(arr2D, plot=False, amp_min=DEFAULT_AMP_MIN):
     # filter peaks
     amps = amps.flatten()
     peaks = zip(i, j, amps)
-    peaks_filtered = filter(lambda x: x[2]>amp_min, peaks) # freq, time, amp
+    peaks_filtered = [x for x in peaks if x[2] > amp_min]  # freq, time, amp
+    
     # get indices for frequency and time
-    frequency_idx = []
-    time_idx = []
-    for x in peaks_filtered:
-        frequency_idx.append(x[1])
-        time_idx.append(x[0])
+    frequency_idx = [x[1] for x in peaks_filtered]
+    time_idx = [x[0] for x in peaks_filtered]
+
     
     if plot:
         # scatter of the peaks
@@ -139,11 +138,12 @@ def generate_hashes(peaks, fan_value=DEFAULT_FAN_VALUE):
     [(e05b341a9b77a51fd26, 32), ... ]
     """
     if PEAK_SORT:
-        peaks.sort(key=itemgetter(1))
+        peaks = sorted(peaks, key=itemgetter(1))
 
-    for i in range(len(peaks)):
+    lenPeaks = len(peaks)
+    for i in range(lenPeaks):
         for j in range(1, fan_value):
-            if (i + j) < len(peaks):
+            if (i + j) < lenPeaks:
 
                 freq1 = peaks[i][IDX_FREQ_I]
                 freq2 = peaks[i + j][IDX_FREQ_I]
@@ -153,5 +153,5 @@ def generate_hashes(peaks, fan_value=DEFAULT_FAN_VALUE):
 
                 if t_delta >= MIN_HASH_TIME_DELTA and t_delta <= MAX_HASH_TIME_DELTA:
                     h = hashlib.sha1(
-                        "%s|%s|%s" % (str(freq1), str(freq2), str(t_delta)))
+                        "{}|{}|{}".format(str(freq1), str(freq2), str(t_delta)).encode('utf-8'))
                     yield (h.hexdigest()[0:FINGERPRINT_REDUCTION], t1)
