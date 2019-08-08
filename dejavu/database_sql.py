@@ -4,6 +4,7 @@ import queue
 
 from mysql.connector import (connection)
 from mysql.connector import (cursor)
+from mysql.connector.cursor import MySQLCursorDict
 
 from dejavu.database import Database
 
@@ -214,7 +215,7 @@ class SQLDatabase(Database):
         """
         Return songs that have the fingerprinted flag set TRUE (1).
         """
-        with self.cursor(cursor_type=DictCursor, charset="utf8") as cur:
+        with self.cursor(cursor_class=MySQLCursorDict, charset="utf8") as cur:
             cur.execute(self.SELECT_SONGS)
             for row in cur:
                 yield row
@@ -223,7 +224,7 @@ class SQLDatabase(Database):
         """
         Returns song by its ID.
         """
-        with self.cursor(cursor_type=DictCursor, charset="utf8") as cur:
+        with self.cursor(cursor_class=MySQLCursorDict, charset="utf8") as cur:
             cur.execute(self.SELECT_SONG, (sid,))
             return cur.fetchone()
 
