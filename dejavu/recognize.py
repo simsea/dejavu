@@ -5,41 +5,41 @@ import numpy as np
 import pyaudio
 import time
 
+class BaseRecognizer():
 
-class BaseRecognizer(object):
+	def __init__(self, dejavu):
+		self.dejavu = dejavu
+		self.Fs = fingerprint.DEFAULT_FS
 
-    def __init__(self, dejavu):
-        self.dejavu = dejavu
-        self.Fs = fingerprint.DEFAULT_FS
+	def _recognize(self, *data):
+		matches = []
+		for d in data:
+			matches.extend(self.dejavu.find_matches(d, Fs=self.Fs))
 
-    def _recognize(self, *data):
-        matches = []
-        for d in data:
-            matches.extend(self.dejavu.find_matches(d, Fs=self.Fs))
-        return self.dejavu.align_matches(matches)
+		return self.dejavu.align_matches(matches)
 
-    def recognize(self):
-        pass  # base class does nothing
+	def recognize(self):
+		pass  # base class does nothing
 
 
 class FileRecognizer(BaseRecognizer):
-    def __init__(self, dejavu):
-        super(FileRecognizer, self).__init__(dejavu)
+	def __init__(self, dejavu):
+		super(FileRecognizer, self).__init__(dejavu)
 
-    def recognize_file(self, filename):
-        frames, self.Fs, file_hash = decoder.read(filename, self.dejavu.limit)
+	def recognize_file(self, filename):
+		frames, self.Fs, file_hash = decoder.read(filename, self.dejavu.limit)
 
-        t = time.time()
-        match = self._recognize(*frames)
-        t = time.time() - t
+		t = time.time()
+		match = self._recognize(*frames)
+		t = time.time() - t
 
-        if match:
-            match['match_time'] = t
+		if match:
+			match['match_time'] = t
 
-        return match
+		return match
 
-    def recognize(self, filename):
-        return self.recognize_file(filename)
+	def recognize(self, filename):
+		return self.recognize_file(filename)
 
 
 class MicrophoneRecognizer(BaseRecognizer):
@@ -61,7 +61,6 @@ class MicrophoneRecognizer(BaseRecognizer):
     def start_recording(self, channels=default_channels,
                         samplerate=default_samplerate,
                         chunksize=default_chunksize):
-        print("* start recording")
         self.chunksize = chunksize
         self.channels = channels
         self.recorded = False
@@ -82,15 +81,12 @@ class MicrophoneRecognizer(BaseRecognizer):
         self.data = [[] for i in range(channels)]
 
     def process_recording(self):
-        print("* recording")
         data = self.stream.read(self.chunksize)
         nums = np.fromstring(data, np.int16)
-        # print(nums)
         for c in range(self.channels):
             self.data[c].extend(nums[c::self.channels])
 
     def stop_recording(self):
-        print("* done recording")
         self.stream.stop_stream()
         self.stream.close()
         self.stream = None
@@ -106,11 +102,11 @@ class MicrophoneRecognizer(BaseRecognizer):
 
     def recognize(self, seconds=10):
         self.start_recording()
-        for i in range(0, int(self.samplerate / self.chunksize * int(seconds))):
+        for i in range(0, int(self.samplerate / self.chunksize * seconds)):
             self.process_recording()
         self.stop_recording()
         return self.recognize_recording()
 
 
 class NoRecordingError(Exception):
-    pass
+	pass
